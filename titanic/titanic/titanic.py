@@ -7,6 +7,7 @@ from abc import ABCMeta, abstractmethod
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import LinearSVC, SVC
 
 
 preds_template_path = 'predictions/{}.csv'
@@ -67,6 +68,66 @@ class SklearnRFCModel(_TitanicModel):
     def _transform_data(self, X):
         features = ["Pclass", "Sex", "SibSp", "Parch"]
         return pd.get_dummies(X[features])
+
+
+class SklearnModel(_TitanicModel):
+    
+    def __init__(self):
+        # self._model = RandomForestClassifier(
+        #     n_estimators=50,
+        #     max_depth=10,
+        #     criterion='gini',
+        #     bootstrap=True,
+        #     random_state=1
+        # )
+        
+        # self._model = LinearSVC(
+        #     max_iter=10000
+        # )
+        
+        self._model = SVC(gamma='scale', max_iter=10000)
+
+        self._features = [
+            'Pclass', 'Sex', 'SibSp', 'Parch', 'Age', 'Fare', 'Embarked'
+        ]
+
+        train_path = 'data/train.csv'
+        train_data = pd.read_csv(train_path, index_col=0)
+        train_data = train_data[self._features]
+
+        train_data = self._transform_data(train_data)
+
+        self._mean = np.mean(train_data, axis=0)
+        self._std = np.std(train_data, axis=0)
+    
+    def fit(self, X, y):
+        return self._model.fit(self._normalize(self._transform_data(X)), y)
+    
+    def predict(self, X):
+        preds = self._model.predict(self._normalize(self._transform_data(X)))
+        return pd.Series(preds, index=X.index, name='Survived')
+
+    def score(self, X, y):
+        return self._model.score(self._normalize(self._transform_data(X)), y)
+
+    def _transform_data(self, X):
+        # return pd.get_dummies(X[features])
+        # cabin = X["Cabin"]
+
+        X2 = X[self._features].copy()
+        X2['Sex'] = (X2['Sex'] == 'female').astype(int)
+        X2 = pd.get_dummies(X2)
+
+        return X2
+
+    def _normalize(self, X):
+        for feature in X.columns:
+            X.loc[pd.isna(X[feature]), feature] = self._mean[feature]
+
+        X -= self._mean
+        X /= self._std
+
+        return X
 
 
 def split_data(train_data, num_folds, fold=0):
