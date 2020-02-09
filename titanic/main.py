@@ -10,7 +10,8 @@ sys.path.append(os.path.abspath("./titanic"))
 
 import pandas as pd
 
-from titanic import process_model, SexModel, SklearnRFCModel, SklearnModel, KerasModel
+from titanic import process_model, SexModel, SklearnRFCModel, SklearnModel, \
+    KerasModel, XgbModel
 
 train_path = 'data/train.csv'
 test_path = 'data/test.csv'
@@ -23,5 +24,6 @@ test_data = pd.read_csv(test_path, index_col=0)
 print("BEST YET: 0.830")
 process_model(train_data, test_data, SexModel)
 # process_model(train_data, test_data, SklearnRFCModel)
-process_model(train_data, test_data, SklearnModel)
+# process_model(train_data, test_data, SklearnModel)
 # process_model(train_data, test_data, KerasModel)
+process_model(train_data, test_data, XgbModel)

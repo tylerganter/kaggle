@@ -35,7 +35,10 @@ class _TitanicModel(metaclass=ABCMeta):
 
 
 class SexModel(_TitanicModel):
-    
+
+    def __init__(self, *args, **kwargs):
+        pass
+
     def fit(self, X, y):
         pass
     
@@ -261,6 +264,112 @@ class KerasModel(_TitanicModel):
         return X
 
 
+class XgbModel(_TitanicModel):
+
+    def __init__(self, params=None):
+        train_path = 'data/train.csv'
+        train_data = pd.read_csv(train_path, index_col=0)
+
+        self._param = {
+            'max_depth': 8,
+            'eta': 0.3,
+            'objective': 'binary:logistic'
+        }
+        self._num_round = 6
+        self._confidence_threshold = 0.5
+
+        if params:
+            if 'max_depth' in params:
+                self._param['max_depth'] = params['max_depth']
+            if 'eta' in params:
+                self._param['eta'] = params['eta']
+            if 'num_round' in params:
+                self._num_round = params['num_round']
+
+        train_data = self._transform_data(train_data, initializing=True)
+        self._mean = np.mean(train_data, axis=0)
+        self._std = np.std(train_data, axis=0)
+
+    def fit(self, X, y):
+        X2 = self._normalize(self._transform_data(X))
+        dtrain = xgb.DMatrix(X2, label=y)
+        self._model = xgb.train(self._param, dtrain, self._num_round)
+
+    def predict(self, X):
+        X2 = self._normalize(self._transform_data(X))
+        confidences = self._model.predict(xgb.DMatrix(X2))
+        preds = (confidences > self._confidence_threshold).astype(int)
+        return pd.Series(preds, index=X2.index, name='Survived')
+
+    def evaluate(self, X, y):
+        preds = self.predict(X)
+        is_correct = preds == y
+        accuracy = np.sum(is_correct) / len(is_correct)
+        return accuracy
+
+    def _transform_data(self, X, initializing=False):
+        # return pd.get_dummies(X[features])
+
+        features = [
+            'Pclass',
+            'Sex',
+            'SibSp',
+            'Parch',
+            'Age',
+            'Fare',
+            'Embarked',
+            # 'Cabin'
+        ]
+
+        X2 = X[features].copy()
+
+        # sex
+        X2['Sex'] = (X2['Sex'] == 'female').astype(int)
+
+        # # cabin count
+        # X2['Cabin Count'] = pd.Series(
+        #     (len(x.split(' ')) if isinstance(x, string_types)
+        #      else np.nan for x in X2['Cabin']),
+        #     index=X2.index
+        # )
+
+        # # cabin letters part 1
+        # X2['cabin letter'] = pd.Series(
+        #     (x[0] if isinstance(x, string_types) else x for x in X2['Cabin']),
+        #     index=X2.index,
+        #     name='cabin letter'
+        # )
+
+        # del X2['Cabin']
+
+        X2 = pd.get_dummies(X2)
+
+        # # cabin letters part 2
+        # if initializing:
+        #     self._cabin_cols = [x for x in X2.columns if x.startswith('cabin letter')]
+        # else:
+        #     for cabin_col in self._cabin_cols:
+        #         if cabin_col not in X2:
+        #             X2[cabin_col] = pd.Series(
+        #                 np.zeros((X2.shape[0])),
+        #                 index=X2.index,
+        #                 name=cabin_col
+        #             )
+
+        X2 = X2.reindex(sorted(X2.columns), axis=1)
+
+        return X2
+
+    def _normalize(self, X):
+        for feature in X.columns:
+            X.loc[pd.isna(X[feature]), feature] = self._mean[feature]
+
+        # X -= self._mean
+        # X /= self._std
+
+        return X
+
+
 def split_data(train_data, num_folds, fold=0):
     np.random.seed(1)
 
@@ -287,7 +396,7 @@ def split_data(train_data, num_folds, fold=0):
     return partial_train_X, val_X, partial_train_y, val_y
 
 
-def train_and_evaluate(train_data, model_class, num_folds):
+def train_and_evaluate(train_data, model_class, num_folds, params=None):
     accuracies = []
 
     for fold in range(num_folds):
@@ -296,7 +405,7 @@ def train_and_evaluate(train_data, model_class, num_folds):
             split_data(train_data, num_folds=num_folds, fold=fold)
         
         # create model
-        model = model_class()
+        model = model_class(params=params)
         
         # train
         model.fit(partial_train_X, partial_train_y)
@@ -319,3 +428,24 @@ def process_model(train_data, test_data, model_class, num_folds=5):
     print('{} accuracy: {:.3f}'.format(model_name, accuracy))
     preds = pd.DataFrame(model.predict(test_data))
     preds.to_csv(preds_template_path.format(model_name))
+
+    # if model_class == XgbModel:
+    #     for max_depth in [8, 12, 16]:
+    #         for eta in [0.3, 0.4]:
+    #             for num_round in [3, 4, 5, 6]:
+    #                 params = {
+    #                     'max_depth': max_depth,
+    #                     'eta': eta,
+    #                     'num_round': num_round
+    #                 }
+    #
+    #                 accuracy, model = train_and_evaluate(
+    #                     train_data, model_class=model_class,
+    #                     num_folds=num_folds,
+    #                     params=params)
+    #
+    #                 if accuracy < 0.834:
+    #                     continue
+    #
+    #                 print('{} accuracy: {:.4f}\t{}'.format(
+    #                     model_name, accuracy, params))
