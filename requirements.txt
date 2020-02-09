@@ -1,0 +1,10 @@
+ipykernel
+jupyter
+jupyterlab
+kaggle
+matplotlib
+numpy
+pandas
+scikit-learn
+tensorflow
+xgboost

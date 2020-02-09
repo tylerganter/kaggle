@@ -10,6 +10,7 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import LinearSVC, SVC
 from tensorflow.keras import models, layers
+import xgboost as xgb
 
 preds_template_path = 'predictions/{}.csv'
 
